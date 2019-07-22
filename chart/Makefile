@@ -8,6 +8,6 @@ NAME = $(shell jq -r .name values.yaml)
 NAMESPACE = $(shell jq -r .namespace values.yaml)
 
 install:
-	helm install --namespace=$(NAMESPACE) --name=$(NAME) .
+	helm upgrade -i --namespace=$(NAMESPACE) --name=$(NAME)
 delete:
 	helm delete --purge $(NAME)
