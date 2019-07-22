@@ -21,9 +21,9 @@ spec:
       serviceAccount: {{ .Values.name | quote }}
       containers:
       - name: {{ .Values.name | quote }}
-        image: gerald1248/dora-controller:latest
-        command: [ "dora-controller" ]
-        args: [ "--debug=true" ]
+        image: gerald1248/event-exporter:latest
+        command: [ "event-exporter" ]
+        args: []
         resources:
           limits:
             cpu: 200m
