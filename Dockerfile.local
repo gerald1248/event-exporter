@@ -1,0 +1,6 @@
+FROM ubuntu:18.10
+WORKDIR /app/
+RUN groupadd app && useradd -g app app
+COPY linux/event-exporter /usr/local/bin/event-exporter
+USER app
+CMD ["event-exporter"]
