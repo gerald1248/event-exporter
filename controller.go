@@ -106,7 +106,8 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 
 	defer c.queue.ShutDown()
-	log.Println(fmt.Sprintf("%s: starting event exporter selecting types=%s involvedObjects=%s reasons=%s", au.Bold(au.Cyan("INFO")), au.Bold(c.state.eventTypes), au.Bold(c.state.involvedObjects), au.Bold(c.state.reasons)))
+	log.Println(fmt.Sprintf("%s: starting event exporter", au.Bold(au.Cyan("INFO"))))
+	log.Println(fmt.Sprintf("%s: filter by types=%s involvedObjects=%s reasons=%s", au.Bold(au.Cyan("INFO")), au.Bold(c.state.eventTypes), au.Bold(c.state.involvedObjects), au.Bold(c.state.reasons)))
 
 	go c.informer.Run(stopCh)
 

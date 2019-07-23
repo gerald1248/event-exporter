@@ -16,4 +16,4 @@ WORKDIR /app/
 RUN groupadd app && useradd -g app app
 COPY --from=builder /go/src/github.com/gerald1248/event-exporter /usr/local/bin/event-exporter
 USER app
-CMD ["event-exporter"]
+CMD ["event-exporter", "-types=Warning"]
