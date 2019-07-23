@@ -14,5 +14,11 @@ type Controller struct {
 	informer  cache.Controller
 	clientset kubernetes.Interface
 	mutex     *sync.Mutex
-	state     map[string]string
+	state     State
+}
+
+type State struct {
+	involvedObjects []string
+	eventTypes      []string
+	reasons         []string
 }

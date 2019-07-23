@@ -24,7 +24,7 @@ import (
 )
 
 // NewController constructs the central controller state
-func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, clientset kubernetes.Interface, mutex *sync.Mutex, state map[string]string) *Controller {
+func NewController(queue workqueue.RateLimitingInterface, indexer cache.Indexer, informer cache.Controller, clientset kubernetes.Interface, mutex *sync.Mutex, state State) *Controller {
 	return &Controller{
 		informer:  informer,
 		indexer:   indexer,
@@ -61,9 +61,13 @@ func (c *Controller) syncToStdout(key string) error {
 		return nil
 	}
 
-	name := obj.(*v1.Event).GetName()
+	eventType := obj.(*v1.Event).Type
+	involvedObject := obj.(*v1.Event).InvolvedObject.Kind
+	reason := obj.(*v1.Event).Reason
 
-	log.Println(fmt.Sprintf("%s: processing event %s", au.Bold(au.Cyan("INFO")), au.Bold(name)))
+	if !selectEvent(c.state, eventType, involvedObject, reason) {
+		return nil
+	}
 
 	bytes, err := json.Marshal(obj)
 	if err != nil {
@@ -102,8 +106,7 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 
 	defer c.queue.ShutDown()
-	log.Println(fmt.Sprintf("%s: starting event exporter", au.Bold(au.Cyan("INFO"))))
-	log.Println(fmt.Sprintf("%s: watching all events", au.Bold(au.Cyan("INFO"))))
+	log.Println(fmt.Sprintf("%s: starting event exporter selecting types=%s involvedObjects=%s reasons=%s", au.Bold(au.Cyan("INFO")), au.Bold(c.state.eventTypes), au.Bold(c.state.involvedObjects), au.Bold(c.state.reasons)))
 
 	go c.informer.Run(stopCh)
 
@@ -128,11 +131,15 @@ func (c *Controller) runWorker() {
 func main() {
 	var kubeconfig string
 	var master string
-	var debug bool
+	var involvedObjects string
+	var eventTypes string
+	var reasons string
 
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.StringVar(&master, "master", "", "master url")
-	flag.BoolVar(&debug, "debug", false, "Debug mode")
+	flag.StringVar(&eventTypes, "types", "", "event types (e.g. Warning)")
+	flag.StringVar(&involvedObjects, "involvedObjects", "", "involved objects (e.g. Pod,ConfigMap)")
+	flag.StringVar(&reasons, "reasons", "", "reasons (e.g. FailedGetResourceMetric)")
 	flag.Parse()
 
 	// support out-of-cluster deployments (param, env var only)
@@ -146,13 +153,13 @@ func main() {
 	if len(kubeconfig) > 0 {
 		config, configError = clientcmd.BuildConfigFromFlags(master, kubeconfig)
 		if configError != nil {
-			fmt.Fprintf(os.Stderr, "%s: %s", au.Bold(au.Red("Out-of-cluster error")), configError)
+			fmt.Fprintf(os.Stderr, "%s: %s\n", au.Bold(au.Red("Out-of-cluster error")), configError)
 			return
 		}
 	} else {
 		config, configError = rest.InClusterConfig()
 		if configError != nil {
-			fmt.Fprintf(os.Stderr, "%s: %s", au.Bold(au.Red("In-cluster error")), configError)
+			fmt.Fprintf(os.Stderr, "%s: %s\n", au.Bold(au.Red("In-cluster error")), configError)
 			return
 		}
 
@@ -161,16 +168,15 @@ func main() {
 	// creates clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %s", au.Bold(au.Red("Error")), err)
+		fmt.Fprintf(os.Stderr, "%s: %s\n", au.Bold(au.Red("Error")), err)
 		return
 	}
 
-	realMain(clientset, debug)
+	realMain(clientset, eventTypes, involvedObjects, reasons)
 }
 
-func realMain(clientset kubernetes.Interface, debug bool) {
+func realMain(clientset kubernetes.Interface, eventTypes, involvedObjects, reasons string) {
 	var mutex = &sync.Mutex{}
-	var state = map[string]string{}
 
 	eventListWatcher := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "events", "", fields.Everything())
 
@@ -197,7 +203,7 @@ func realMain(clientset kubernetes.Interface, debug bool) {
 		},
 	}, cache.Indexers{})
 
-	controller := NewController(queue, indexer, informer, clientset, mutex, state)
+	controller := NewController(queue, indexer, informer, clientset, mutex, getState(eventTypes, involvedObjects, reasons))
 
 	stop := make(chan struct{})
 	defer close(stop)
